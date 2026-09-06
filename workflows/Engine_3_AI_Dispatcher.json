@@ -1,0 +1,507 @@
+{
+  "name": "Engine 3 - Multi Tenant Intelligent Dispatcher",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        16,
+        0
+      ],
+      "id": "3a3b3eec-30b5-43cf-9d10-20f5f13071c3",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.evolution-api.com/message/sendText/{{ $json.evolution_instance_name }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $json.evolution_api_key }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $json.recipient_phone }}\",\n  \"text\": \"{{ $json.message_text }}\\n\\nOrder here: {{ $json.dynamic_link }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        576,
+        0
+      ],
+      "id": "0ad6eb20-664f-42f6-b0a7-0922f35e56f3",
+      "name": "WhatsApp: Evolution API",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d57ca01e-08a2-4fe4-a3a6-88a81d12b9e5",
+              "leftValue": "={{ $json.error ? \"FAILED\" : \"SUCCESS\" }}",
+              "rightValue": "SUCCESS",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        816,
+        -64
+      ],
+      "id": "e0b7ced8-7379-4400-835f-cb45b6fc1750",
+      "name": "WA Succeeded?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d702de03-87b7-443a-9a0e-e74707aff5e1",
+              "name": "channel_used",
+              "value": "WHATSAPP",
+              "type": "string"
+            },
+            {
+              "id": "f8ee18da-dd22-43fd-864c-f9d8d74d963d",
+              "name": "status",
+              "value": "SENT",
+              "type": "string"
+            },
+            {
+              "id": "1619edeb-7010-499c-a064-71af3b2014a2",
+              "name": "error_message",
+              "value": "None",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1008,
+        -192
+      ],
+      "id": "94ef417f-9f28-4423-b43d-f6cf462a9642",
+      "name": "WA Success Log"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.sms-provider.com/sms/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"to\": \"{{ $('When Executed by Another Workflow').first().json.recipient_phone }}\",\n  \"message\": \"{{ $('When Executed by Another Workflow').first().json.message_text }} {{ $('When Executed by Another Workflow').first().json.dynamic_link }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1008,
+        48
+      ],
+      "id": "640c494a-4430-4f15-b7ce-bc364adeed89",
+      "name": "SMS: Fallback Provider",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1b4e489a-1440-4d00-9210-280d6e27602b",
+              "leftValue": "={{ $json.error ? \"FAILED\" : \"SUCCESS\" }}",
+              "rightValue": "SUCCESS",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1264,
+        32
+      ],
+      "id": "976ff247-8b2a-4bb2-9b77-60615e70bec6",
+      "name": "SMS Succeeded?1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "929b4cec-2979-4c5f-9e4b-cc704e781a01",
+              "name": "channel_used",
+              "value": "SMS",
+              "type": "string"
+            },
+            {
+              "id": "d763ab9f-3cd9-4adb-9096-f758e533eae8",
+              "name": "status",
+              "value": "SENT",
+              "type": "string"
+            },
+            {
+              "id": "9e4a978f-1efe-43d2-b328-ead71da00c7e",
+              "name": "error_message",
+              "value": "WhatsApp failed, SMS succeeded",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1504,
+        -64
+      ],
+      "id": "2e1c5a72-a93a-4290-86a6-bb59ea0817d6",
+      "name": "SMS Success Log"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "af86c751-2912-4626-8d5c-607acb215eac",
+              "name": "channel_used",
+              "value": "EMAIL",
+              "type": "string"
+            },
+            {
+              "id": "86aedf10-e174-482a-8978-de6e0c3cc366",
+              "name": "status",
+              "value": "={{ $json.error ? \"FAILED\" : \"SENT\" }}",
+              "type": "string"
+            },
+            {
+              "id": "c612553b-1475-410d-afe0-be772459f83d",
+              "name": "error_message",
+              "value": "={{ $json.error ? $json.error.message : \"WhatsApp and SMS failed, Email succeeded\" }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1728,
+        32
+      ],
+      "id": "0365497d-bc15-4ee9-a440-2ebb21fad9a1",
+      "name": "Set: Email Result Log"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO campaign_logs (\n  tenant_id,\n  customer_id,\n  campaign_type,\n  channel_used,\n  status,\n  dynamic_link,\n  error_message,\n  created_at\n) VALUES (\n  '{{ $('When Executed by Another Workflow').item.json.tenant_id || $('When Executed by Another Workflow').first().json.tenant_id }}',\n  {{ $('When Executed by Another Workflow').item.json.customer_id || $('When Executed by Another Workflow').first().json.customer_id }},\n  '{{ $('When Executed by Another Workflow').item.json.campaign_type || $('When Executed by Another Workflow').first().json.campaign_type }}',\n  '{{ $json.channel_used }}',\n  '{{ $json.status }}',\n  '{{ $('When Executed by Another Workflow').item.json.dynamic_link || $('When Executed by Another Workflow').first().json.dynamic_link || \"\" }}',\n  '{{ $json.error_message || \"\" }}',\n  NOW()\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1936,
+        -192
+      ],
+      "id": "82bdb329-0daf-4a4a-85ba-6cc5204f427a",
+      "name": "DB: Insert Campaign Log",
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES_CREDENTIAL_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Engine 3: Multi channel message dispatcher\n\nPurpose:\n1. Delivers message using each restaurant's own WhatsApp account.\n2. If WhatsApp fails, it switches to SMS and Email further, automatically.\n3. Saves the status of message in database.",
+        "height": 240,
+        "width": 420
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        16,
+        -272
+      ],
+      "typeVersion": 1,
+      "id": "4dfdc8b9-b079-4f16-abf0-6408ee09e655",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Write the promotional message for this customer.",
+        "options": {
+          "systemMessage": "=You are an expert restaurant marketing assistant for {{ $json.restaurant_name }}.\nWrite a warm, punchy promotional WhatsApp message for customer {{ $json.customer_name || 'there' }}.\n\nContext:\n- Campaign: {{ $json.campaign_type }} (e.g. WELCOME, REPEAT_7D, WINBACK_30D)\n- Recent items ordered: {{ $json.items_ordered || 'our signature dishes' }}\n- Direct ordering link: {{ $json.dynamic_link }}\n\nGuidelines:\n- Keep it strictly under 2 sentences.\n- Include 2 relevant food emojis.\n- Make it feel personal by mentioning their past dishes or loyalty.\n- Always end with the direct ordering link exactly as provided."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        240,
+        0
+      ],
+      "id": "dabb46af-2647-4132-afd7-a7fe248729d9",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        208,
+        208
+      ],
+      "id": "b1d80976-4033-48ac-9b1a-0716a0338e33",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.email-provider.com/email/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  JSON.stringify({\n    \"to\": $('When Executed by Another Workflow').first().json.recipient_email,\n    \"subject\": \"Important update regarding your order\",\n    \"body\":\n      $('When Executed by Another Workflow').first().json.message_text\n      + \" \"\n      + $('When Executed by Another Workflow').first().json.dynamic_link\n  })\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1504,
+        128
+      ],
+      "id": "8f8bf8b7-1e3a-4358-b532-cde9e9de0fdd",
+      "name": "Send Email",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "onError": "continueErrorOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp: Evolution API": {
+      "main": [
+        [
+          {
+            "node": "WA Succeeded?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WA Succeeded?": {
+      "main": [
+        [
+          {
+            "node": "WA Success Log",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SMS: Fallback Provider",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMS: Fallback Provider": {
+      "main": [
+        [
+          {
+            "node": "SMS Succeeded?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMS Succeeded?1": {
+      "main": [
+        [
+          {
+            "node": "SMS Success Log",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set: Email Result Log": {
+      "main": [
+        [
+          {
+            "node": "DB: Insert Campaign Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMS Success Log": {
+      "main": [
+        [
+          {
+            "node": "DB: Insert Campaign Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WA Success Log": {
+      "main": [
+        [
+          {
+            "node": "DB: Insert Campaign Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp: Evolution API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "Set: Email Result Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "00000000-0000-0000-0000-000000000000",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_INSTANCE_ID"
+  },
+  "nodeGroups": [],
+  "id": "WORKFLOW_ID_ENGINE_3",
+  "tags": []
+}
