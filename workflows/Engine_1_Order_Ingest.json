@@ -1,0 +1,347 @@
+{
+  "name": "Engine 1 - Order Ingestion & Customer Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "order-ingest",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "1469bfcf-b4b1-48e4-9ab1-cee62cf51dcf",
+      "name": "Webhook: Order Ingest",
+      "webhookId": "YOUR WEBHOOK ID"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  id AS tenant_id,\n  restaurant_name,\n  evolution_instance_name,\n  evolution_api_key,\n  sms_api_key,\n  is_active\nFROM tenants\nWHERE id = '{{ $json.body.tenant_id }}'\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        224,
+        0
+      ],
+      "id": "3871da4e-538e-433f-a4ec-f98325e914d5",
+      "name": "DB: Get Tenant Settings",
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES CREDENTIAL ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO customers (\n  tenant_id,\n  phone,\n  email,\n  name,\n  total_orders,\n  total_spent,\n  last_order_at\n) VALUES (\n  '{{ $('Webhook: Order Ingest').first().json.body.tenant_id }}',\n  '{{ $('Webhook: Order Ingest').first().json.body.customer_phone }}',\n  '{{ $('Webhook: Order Ingest').first().json.body.customer_email }}',\n  '{{ $('Webhook: Order Ingest').first().json.body.customer_name }}',\n  1,\n  {{ $('Webhook: Order Ingest').first().json.body.order_total }},\n  NOW()\n)\nON CONFLICT (tenant_id,phone) \nDO UPDATE SET \n  total_orders = customers.total_orders + 1,\n  total_spent = customers.total_spent + EXCLUDED.total_spent,\n  last_order_at = NOW(),\n  name = EXCLUDED.name,\n  email = EXCLUDED.email\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        448,
+        0
+      ],
+      "id": "e61ff3ea-a638-4a52-8729-eafd9be3d459",
+      "name": "DB: Upsert Customer",
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES CREDENTIAL ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COUNT(*) AS welcome_count\nFROM campaign_logs\nWHERE tenant_id = '{{ $json.tenant_id }}'\n  AND customer_id = {{ $json.id }}\n  AND campaign_type = 'WELCOME'\n  AND status IN ('SENT', 'SUCCESS');",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        672,
+        0
+      ],
+      "id": "60d77f11-39bb-44d3-8364-56bff54d1e08",
+      "name": "DB: Check Previous Welcome",
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES CREDENTIAL ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e3eb5a07-62d2-4120-a8f8-3dc5233f68a6",
+              "leftValue": "={{ Number($json.welcome_count) }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        896,
+        0
+      ],
+      "id": "0039eb48-ef2e-4021-8b3b-7902602d3b90",
+      "name": "Should Send Welcome?"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "WORKFLOW ID ENGINE 3",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/WORKFLOW_ID_ENGINE_3",
+          "cachedResultName": "Engine 3 - Multi-Tenant Intelligent Dispatcher"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1232,
+        -128
+      ],
+      "id": "d36050a5-9103-45b0-b9ef-f910c35581de",
+      "name": "Call 'Engine 3 - Multi-Tenant Intelligent Dispatcher'"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"message\": \"Order processed and customer synced\",\n  \"customer_id\": {{ $('DB: Upsert Customer').first().json.id }},\n  \"welcome_sent\": {{ $('DB: Check Previous Welcome').first().json.welcome_count == 0 }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1408,
+        16
+      ],
+      "id": "c705ce5f-2290-4060-a137-984b47c49e86",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "content": "## Engine 1: Receiving orders & Saving customers\n\nPurpose:\n1. Automatically receives new bills from the restaurant billing terminal.\n2. Saves customer's information in database.\n3. Sends a welcome discount link on their very first order.",
+        "height": 208,
+        "width": 432
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -32,
+        -240
+      ],
+      "typeVersion": 1,
+      "id": "877b37ab-dcb9-4f85-87f4-2818cf640709",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1a7efec7-336c-4995-8e4a-e7104136dc71",
+              "name": "tenant_id",
+              "value": "={{ $('Webhook: Order Ingest').item.json.body.tenant_id }}",
+              "type": "string"
+            },
+            {
+              "id": "129cae5a-98db-4aa7-a895-eb542bdaded5",
+              "name": "customer_id",
+              "value": "={{ $('DB: Upsert Customer').item.json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "386b3c02-69fd-416a-a288-c973b04f11b0",
+              "name": "customer_name",
+              "value": "={{ $('DB: Upsert Customer').item.json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "c11c9673-049e-40aa-b5c8-3c56a0acd957",
+              "name": "recipient_phone",
+              "value": "={{ $('DB: Upsert Customer').item.json.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "92e6a42b-95c9-44e8-b8c9-2d71ad404a28",
+              "name": "recipient_email",
+              "value": "={{ $('DB: Upsert Customer').item.json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "99b3c1b7-e568-42b5-bc78-de05a61b1d19",
+              "name": "campaign_type",
+              "value": "WELCOME",
+              "type": "string"
+            },
+            {
+              "id": "6ff1fe1c-577b-4f8b-9c89-25eff597c910",
+              "name": "dynamic_link",
+              "value": "=https://order.example.in/menu?ref={{ $('DB: Upsert Customer').item.json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "be6d179b-71d2-4e92-88e3-96233ce9aac7",
+              "name": "evolution_instance_name",
+              "value": "={{ $('DB: Get Tenant Settings').item.json.evolution_instance_name }}",
+              "type": "string"
+            },
+            {
+              "id": "8b8f1b58-119c-48db-84dd-0fca3ec40809",
+              "name": "evolution_api_key",
+              "value": "={{ $('DB: Get Tenant Settings').item.json.evolution_api_key }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1056,
+        -128
+      ],
+      "id": "ee193a4f-d13f-4fe1-a090-1eaaea0cb957",
+      "name": "Edit Fields"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook: Order Ingest": {
+      "main": [
+        [
+          {
+            "node": "DB: Get Tenant Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DB: Get Tenant Settings": {
+      "main": [
+        [
+          {
+            "node": "DB: Upsert Customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DB: Upsert Customer": {
+      "main": [
+        [
+          {
+            "node": "DB: Check Previous Welcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DB: Check Previous Welcome": {
+      "main": [
+        [
+          {
+            "node": "Should Send Welcome?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Send Welcome?": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'Engine 3 - Multi-Tenant Intelligent Dispatcher'": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Call 'Engine 3 - Multi-Tenant Intelligent Dispatcher'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "VERSION_ID",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR INSTANCE ID"
+  },
+  "nodeGroups": [],
+  "id": "WORKFLOW_ID_ENGINE_1",
+  "tags": []
+}
